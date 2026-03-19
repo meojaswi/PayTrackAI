@@ -35,21 +35,28 @@ function generateFallbackDraft({
   similarDebtors,
   recentMessages,
 }) {
-  const greeting =
-    language === "Hindi"
-      ? `Namaste ${debtor.name} ji,`
-      : language === "Mixed"
-        ? `Hello ${debtor.name} ji,`
-        : `Hello ${debtor.name},`;
+  const amount = formatCurrency(debtor.pendingAmount);
+  const due = formatDate(debtor.dueDate);
 
-  const actionText =
-    language === "Hindi"
-      ? "Kripya payment update aaj share karein."
-      : "Please share a payment update today.";
+  const templates = {
+    English: {
+      Polite: `Dear ${debtor.name}, this is a gentle reminder that your payment of ${amount} was due on ${due}. We request you to kindly arrange the payment at your earliest convenience. Thank you for your cooperation.`,
+      Firm: `Dear ${debtor.name}, your payment of ${amount} due on ${due} remains unpaid. Please clear this immediately to avoid further follow-up. Kindly confirm once done.`,
+      Urgent: `Dear ${debtor.name}, your payment of ${amount} due on ${due} is critically overdue. Immediate action is required. Please pay now and share the confirmation.`,
+    },
+    Hindi: {
+      Polite: `प्रिय ${debtor.name} जी, आपको सूचित किया जाता है कि ${due} को देय ${amount} की राशि अभी तक लंबित है। कृपया इसे शीघ्र अति शीघ्र जमा करने की व्यवस्था करें। आपके सहयोग के लिए धन्यवाद।`,
+      Firm: `${debtor.name} जी, आपकी ${amount} की बकाया राशि जो ${due} को देय थी, अभी तक प्राप्त नहीं हुई है। कृपया तुरंत भुगतान करें और हमें सूचित करें।`,
+      Urgent: `${debtor.name} जी, आपका ${amount} का भुगतान जो ${due} को देय था, अत्यंत विलंबित हो चुका है। तत्काल भुगतान करें अन्यथा आगे की कार्यवाही की जाएगी।`,
+    },
+    Mixed: {
+      Polite: `Hello ${debtor.name} ji, aapka ${amount} ka payment ${due} se pending hai. Please jaldi se payment karein. Shukriya.`,
+      Firm: `Hello ${debtor.name} ji, aapka ${amount} ka payment ${due} se due hai aur abhi tak nahi aaya. Kripya turant payment karein aur confirm karein.`,
+      Urgent: `${debtor.name} ji, aapka ${amount} ka payment bahut zyada overdue ho gaya hai. Abhi turant payment karein, warna aage ki action leni padegi.`,
+    },
+  };
 
-  return `${greeting} your pending payment of ${formatCurrency(
-    debtor.pendingAmount
-  )} is due from ${formatDate(debtor.dueDate)}. Current status is ${debtor.status || "Pending"}. This ${tone.toLowerCase()} ${channel} reminder used ${similarDebtors.length} related debtor records and ${recentMessages.length} prior message references. ${actionText}`;
+  return templates[language]?.[tone] || templates["English"]["Polite"];
 }
 
 function mapRetrievedDebtor(debtor, score) {
@@ -84,8 +91,12 @@ async function generateWithGroq(context) {
     messages: [
       {
         role: "system",
-        content:
-          "You write concise debt recovery reminders. Keep them professional, specific, and grounded only in the provided debtor and retrieval context. Do not invent payments, promises, or legal threats. Output only the message text, nothing else.",
+        content: `You write concise debt recovery reminders. 
+- If language is Hindi, respond ONLY in Devanagari script (हिंदी)
+- If language is Mixed, use a mix of Hindi and English
+- If language is English, respond in English
+- Tone must be ${context.requestedStyle.tone}: Polite=gentle, Firm=direct, Urgent=strict
+- Output ONLY the message text, no labels or explanations`,
       },
       {
         role: "user",
